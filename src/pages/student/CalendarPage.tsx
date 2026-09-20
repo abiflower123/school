@@ -26,7 +26,8 @@ export default function CalendarPage() {
   const today = new Date();
   const [currentDate, setCurrentDate] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
 
-  const attMap = getMonthAttendanceMap(sid);
+  const monthNamesShort = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const attMap = getMonthAttendanceMap(sid, monthNamesShort[currentDate.getMonth()], currentDate.getFullYear().toString());
   const exams = getUpcomingExams(sid);
   const monthEvents = getCalendarEventsForMonth(currentDate.getFullYear(), currentDate.getMonth());
 

@@ -5,24 +5,16 @@ import {
   CheckCircle2,
   Clock3,
   X,
-  ShieldCheck,
   Building2,
   Sparkles,
   Zap,
   ArrowRight,
-  Filter,
   FileText,
   Search,
-  Check,
   AlertCircle,
-  HelpCircle,
-  TrendingUp,
-  Download,
   IndianRupee,
   Users,
   BadgeCheck,
-  ChevronRight,
-  Layers,
   Calculator,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
@@ -34,6 +26,8 @@ import {
   type ScholarshipApplication,
   type ScholarshipCategory,
 } from "../../services/mock/scholarships";
+import { StatusBadge, type StatusVariant } from "../../components/ui/StatusBadge";
+import { AttachmentList } from "../../components/ui/AttachmentList";
 
 const categoryIcons: Record<ScholarshipCategory, any> = {
   Government: Building2,
@@ -42,20 +36,21 @@ const categoryIcons: Record<ScholarshipCategory, any> = {
   "Family & Welfare": Users,
 };
 
-const statusBadgeStyles: Record<string, string> = {
-  Approved: "bg-emerald-500/10 text-emerald-700 border-emerald-200/60 ring-1 ring-emerald-500/20",
-  Disbursed: "bg-emerald-500/10 text-emerald-700 border-emerald-200/60",
-  "Under Review": "bg-amber-500/10 text-amber-700 border-amber-200/60 animate-pulse",
-  Submitted: "bg-blue-500/10 text-blue-700 border-blue-200/60",
-  Rejected: "bg-rose-500/10 text-rose-700 border-rose-200/60",
+const STATUS_VARIANT: Record<ScholarshipApplication["status"], StatusVariant> = {
+  Approved: "success",
+  Disbursed: "success",
+  "Under Review": "warning",
+  Submitted: "info",
+  Rejected: "danger",
+  "Not Applied": "neutral",
 };
 
 export default function ScholarshipPage() {
   const { selectedChild } = useAuth();
   const studentId = selectedChild?.id ?? "STU001";
   const studentName = selectedChild?.name ?? "Kavya Ranganathan";
-  const studentClass = selectedChild?.grade ? `Class ${selectedChild.grade}` : "Class X-A";
-  const rollNo = selectedChild?.rollNo ?? "2026-X-042";
+  const studentClass = selectedChild ? `Class ${selectedChild.class}-${selectedChild.section}` : "Class X-A";
+  const rollNo = selectedChild?.rollNumber ?? "2026-X-042";
 
   const scholarships = useMemo(() => getAvailableScholarships(), []);
   const [applications, setApplications] = useState<ScholarshipApplication[]>(() =>
@@ -68,7 +63,7 @@ export default function ScholarshipPage() {
 
   // Application Modal / Drawer State
   const [applyingScheme, setApplyingScheme] = useState<Scholarship | null>(null);
-  const [selectedDocs, setSelectedDocs] = useState<string[]>([]);
+  const [uploadedDocs, setUploadedDocs] = useState<Record<string, File | null>>({});
   const [reasonNotes, setReasonNotes] = useState("");
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -119,23 +114,31 @@ export default function ScholarshipPage() {
 
   const handleOpenApplyModal = (scheme: Scholarship) => {
     setApplyingScheme(scheme);
-    setSelectedDocs([...scheme.requiredDocs]);
+    setUploadedDocs({});
     setReasonNotes("");
   };
 
-  const handleToggleDoc = (docName: string) => {
-    if (selectedDocs.includes(docName)) {
-      setSelectedDocs(selectedDocs.filter((d) => d !== docName));
-    } else {
-      setSelectedDocs([...selectedDocs, docName]);
-    }
+  const handleFileSelect = (docName: string, file: File | null) => {
+    setUploadedDocs((prev) => ({ ...prev, [docName]: file }));
   };
+
+  const allDocsUploaded =
+    !!applyingScheme && applyingScheme.requiredDocs.every((doc) => !!uploadedDocs[doc]);
 
   const handleSubmitApplication = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!applyingScheme) return;
+    if (!applyingScheme || !allDocsUploaded) return;
 
-    const updated = applyForScholarship(studentId, applications, applyingScheme, selectedDocs, reasonNotes);
+    const attachments = applyingScheme.requiredDocs.map((doc) => {
+      const file = uploadedDocs[doc]!;
+      return {
+        name: file.name,
+        type: file.type.includes("pdf") ? ("PDF" as const) : file.type.startsWith("image") ? ("Image" as const) : ("Document" as const),
+        size: `${(file.size / 1024).toFixed(0)} KB`,
+      };
+    });
+
+    const updated = applyForScholarship(studentId, applications, applyingScheme, attachments, reasonNotes);
     setApplications(updated);
     setApplyingScheme(null);
     setToastMessage(`Application for "${applyingScheme.name}" submitted successfully! Ref: ${updated[0].id}`);
@@ -310,6 +313,17 @@ export default function ScholarshipPage() {
                         </div>
                       </div>
 
+                      <p className="text-[10px] text-zinc-400">
+                        Posted by {scheme.publishedBy} · {scheme.postedDate}
+                      </p>
+
+                      {scheme.recommendedBy && (
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-1 text-[10px] font-bold text-blue-700 border border-blue-200/60">
+                          <Sparkles size={11} />
+                          Recommended by {scheme.recommendedBy}
+                        </span>
+                      )}
+
                       <p className="text-xs text-zinc-600 leading-relaxed">{scheme.description}</p>
 
                       {/* Eligibility Criteria Checklist */}
@@ -337,14 +351,11 @@ export default function ScholarshipPage() {
 
                       {isApplied ? (
                         <div className="flex items-center gap-2">
-                          <span
-                            className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-bold border ${
-                              statusBadgeStyles[existingApp?.status ?? "Submitted"]
-                            }`}
-                          >
-                            <BadgeCheck size={14} />
-                            {existingApp?.status ?? "Applied"}
-                          </span>
+                          <StatusBadge
+                            label={existingApp?.status ?? "Applied"}
+                            variant={existingApp ? STATUS_VARIANT[existingApp.status] : "info"}
+                            icon={<BadgeCheck size={12} />}
+                          />
                         </div>
                       ) : (
                         <button
@@ -448,14 +459,7 @@ export default function ScholarshipPage() {
                           <span className="text-[10px] text-zinc-400 block">Sanctioned Value</span>
                           <span className="text-sm font-bold text-emerald-600">{app.amountGranted}</span>
                         </div>
-                        <span
-                          className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold border ${
-                            statusBadgeStyles[app.status] ?? "bg-zinc-100 text-zinc-700"
-                          }`}
-                        >
-                          <BadgeCheck size={14} />
-                          {app.status}
-                        </span>
+                        <StatusBadge label={app.status} variant={STATUS_VARIANT[app.status]} icon={<BadgeCheck size={12} />} />
                       </div>
                     </div>
 
@@ -497,6 +501,15 @@ export default function ScholarshipPage() {
                       <div className="rounded-2xl bg-zinc-50 p-3 text-xs text-zinc-600 border border-zinc-100">
                         <span className="font-bold text-zinc-800">Admin Remarks: </span>
                         {app.remarks}
+                      </div>
+                    )}
+
+                    {app.documentsSubmitted.length > 0 && (
+                      <div>
+                        <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-zinc-400">
+                          Documents Submitted
+                        </p>
+                        <AttachmentList attachments={app.documentsSubmitted} />
                       </div>
                     )}
                   </div>
@@ -682,33 +695,47 @@ export default function ScholarshipPage() {
                 </div>
               </div>
 
-              {/* Document Proof Checklist */}
+              {/* Document Proof Uploads */}
               <div className="space-y-2">
                 <label className="block text-xs font-bold uppercase tracking-wider text-zinc-600">
                   Attach Required Documents
                 </label>
                 <div className="space-y-2">
                   {applyingScheme.requiredDocs.map((docName) => {
-                    const isChecked = selectedDocs.includes(docName);
+                    const file = uploadedDocs[docName];
                     return (
                       <label
                         key={docName}
-                        onClick={() => handleToggleDoc(docName)}
-                        className={`flex items-center justify-between rounded-2xl border p-3 text-xs font-medium cursor-pointer transition ${
-                          isChecked
+                        className={`flex items-center justify-between gap-3 rounded-2xl border p-3 text-xs font-medium cursor-pointer transition ${
+                          file
                             ? "border-emerald-300 bg-emerald-50/50 text-emerald-900"
-                            : "border-zinc-200 bg-white text-zinc-700"
+                            : "border-dashed border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50"
                         }`}
                       >
-                        <div className="flex items-center gap-2">
-                          <FileText size={16} className={isChecked ? "text-emerald-600" : "text-zinc-400"} />
-                          <span>{docName}</span>
+                        <div className="flex min-w-0 items-center gap-2">
+                          <FileText size={16} className={file ? "text-emerald-600" : "text-zinc-400"} />
+                          <div className="min-w-0">
+                            <p>{docName}</p>
+                            {file && <p className="truncate text-[10px] font-normal text-emerald-700">{file.name}</p>}
+                          </div>
                         </div>
-                        <CheckCircle2 size={16} className={isChecked ? "text-emerald-600" : "text-zinc-300"} />
+                        <span className={`shrink-0 rounded-lg px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${
+                          file ? "bg-emerald-100 text-emerald-700" : "bg-zinc-100 text-zinc-500"
+                        }`}>
+                          {file ? "Uploaded" : "Choose File"}
+                        </span>
+                        <input
+                          type="file"
+                          className="hidden"
+                          onChange={(e) => handleFileSelect(docName, e.target.files?.[0] ?? null)}
+                        />
                       </label>
                     );
                   })}
                 </div>
+                {!allDocsUploaded && (
+                  <p className="text-[11px] text-zinc-400">All required documents must be attached before submitting.</p>
+                )}
               </div>
 
               {/* Statement of Purpose */}
@@ -735,7 +762,8 @@ export default function ScholarshipPage() {
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 rounded-2xl bg-zinc-900 py-3 text-xs font-bold text-white shadow-lg shadow-zinc-900/10 hover:bg-zinc-800 transition"
+                  disabled={!allDocsUploaded}
+                  className="flex-1 rounded-2xl bg-zinc-900 py-3 text-xs font-bold text-white shadow-lg shadow-zinc-900/10 hover:bg-zinc-800 transition disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Submit Application
                 </button>

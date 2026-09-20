@@ -1,13 +1,26 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import {
   CreditCard, Download, CheckCircle2, AlertTriangle, Clock3, X,
-  Shield, Smartphone, ArrowRight, Wallet, History, Receipt, QrCode, Asterisk
+  Shield, ArrowRight, Wallet, History, Receipt, QrCode, Asterisk, XCircle, RotateCw, HourglassIcon
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import {
-  getFeeItems, getPaymentHistory, getFeeSummary, mockPayFee, mockPayMultipleFees, formatINR,
-  type FeeItem, type PaymentRecord
+  getFeeItems, getPaymentHistory, mockPayMultipleFees, mockPayInstallment, getRemainingAmount, formatINR,
+  type FeeItem, type PaymentRecord, type Installment
 } from "../../services/mock/fees";
+import { PageHeader } from "../../components/ui/PageHeader";
+import { SkeletonCard } from "../../components/ui/Skeleton";
+import { useMockLoading } from "../../hooks/useMockLoading";
+import { StatusBadge, type StatusVariant } from "../../components/ui/StatusBadge";
+import { AttachmentList } from "../../components/ui/AttachmentList";
+
+type PaymentStep = "select" | "processing" | "success" | "failed" | "cancelled" | "pendingVerification";
+
+const INSTALLMENT_STATUS_VARIANT: Record<Installment["status"], StatusVariant> = {
+  Paid: "success",
+  Pending: "warning",
+  Overdue: "danger",
+};
 
 export default function FeesPage() {
   const { selectedChild } = useAuth();
@@ -16,16 +29,28 @@ export default function FeesPage() {
   const [feeItems, setFeeItems] = useState(() => getFeeItems(studentId));
   const [payments, setPayments] = useState(() => getPaymentHistory(studentId));
   const [activeTab, setActiveTab] = useState<"pending" | "history">("pending");
-  
+  const loading = useMockLoading([studentId]);
+
   // Payment Modal State
   const [payingFees, setPayingFees] = useState<FeeItem[]>([]);
-  const [paymentStep, setPaymentStep] = useState<"select" | "processing" | "success">("select");
+  const [payingInstallment, setPayingInstallment] = useState<{ feeItem: FeeItem; installment: Installment } | null>(null);
+  const [paymentStep, setPaymentStep] = useState<PaymentStep>("select");
   const [selectedMethod, setSelectedMethod] = useState<PaymentRecord["method"]>("UPI");
   const [lastReceipt, setLastReceipt] = useState<PaymentRecord | null>(null);
+  const [simulateFailure, setSimulateFailure] = useState(false);
+  const cancelPaymentRef = useRef(false);
 
-  const summary = getFeeSummary(studentId);
   const pending = feeItems.filter((f) => f.status === "Pending" || f.status === "Overdue");
-  const paid = feeItems.filter((f) => f.status === "Paid");
+  const feeCircular = feeItems.find((f) => f.circular)?.circular;
+
+  // Derived from local `feeItems` state (not the stale mock service call) so the
+  // banner reflects payments made this session instead of the original seed data.
+  const nextDueFee = [...pending].sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())[0];
+  const summary = {
+    hasOverdue: pending.some((f) => f.status === "Overdue"),
+    nextDueDate: nextDueFee?.dueDate ?? null,
+    nextDueAmount: nextDueFee ? getRemainingAmount(nextDueFee) : 0,
+  };
 
   useEffect(() => {
     setFeeItems(getFeeItems(studentId));
@@ -34,38 +59,85 @@ export default function FeesPage() {
 
   const openPayModal = (fees: FeeItem[]) => {
     setPayingFees(fees);
+    setPayingInstallment(null);
     setPaymentStep("select");
     setSelectedMethod("UPI");
+    setSimulateFailure(false);
+    cancelPaymentRef.current = false;
   };
 
+  const openPayInstallmentModal = (feeItem: FeeItem, installment: Installment) => {
+    setPayingInstallment({ feeItem, installment });
+    setPayingFees([]);
+    setPaymentStep("select");
+    setSelectedMethod("UPI");
+    setSimulateFailure(false);
+    cancelPaymentRef.current = false;
+  };
+
+  const payingTotal = payingInstallment
+    ? payingInstallment.installment.amount
+    : payingFees.reduce((sum, f) => sum + getRemainingAmount(f), 0);
+
+  const payingLabel = payingInstallment
+    ? `${payingInstallment.feeItem.name} — ${payingInstallment.installment.label}`
+    : payingFees.length > 1
+    ? `Total Balance (${payingFees.length} items)`
+    : payingFees[0]?.name ?? "";
+
   const handleConfirmPayment = async () => {
-    if (payingFees.length === 0) return;
+    if (payingFees.length === 0 && !payingInstallment) return;
+    cancelPaymentRef.current = false;
     setPaymentStep("processing");
     await new Promise((r) => setTimeout(r, 2000));
-    
-    const feeIds = payingFees.map(f => f.id);
-    const { updatedFees, updatedPayments, receipt } = mockPayMultipleFees(studentId, feeIds, selectedMethod, feeItems, payments);
-    
+
+    if (cancelPaymentRef.current) {
+      setPaymentStep("cancelled");
+      return;
+    }
+
+    if (simulateFailure) {
+      setPaymentStep("failed");
+      return;
+    }
+
+    // Cheque payments require manual bank clearance before they're confirmed —
+    // don't mark the fee paid until that verification happens (backend-driven later).
+    if (selectedMethod === "Cheque") {
+      setPaymentStep("pendingVerification");
+      return;
+    }
+
+    const { updatedFees, updatedPayments, receipt } = payingInstallment
+      ? mockPayInstallment(payingInstallment.feeItem.id, payingInstallment.installment.id, selectedMethod, feeItems, payments)
+      : mockPayMultipleFees(studentId, payingFees.map((f) => f.id), selectedMethod, feeItems, payments);
+
     setFeeItems(updatedFees);
     setPayments(updatedPayments);
     setLastReceipt(receipt);
     setPaymentStep("success");
   };
 
-  const closeModal = () => {
-    setPayingFees([]);
-    setPaymentStep("select");
-    setLastReceipt(null);
+  const handleCancelPayment = () => {
+    cancelPaymentRef.current = true;
   };
 
-  const totalDue = pending.reduce((s, f) => s + f.amount, 0);
+  const closeModal = () => {
+    setPayingFees([]);
+    setPayingInstallment(null);
+    setPaymentStep("select");
+    setLastReceipt(null);
+    setSimulateFailure(false);
+  };
+
+  const totalDue = pending.reduce((s, f) => s + getRemainingAmount(f), 0);
 
   // Calculate Breakdown percentages
   const breakdown = useMemo(() => {
     if (totalDue === 0) return [];
     const categoryTotals: Record<string, number> = {};
     pending.forEach(f => {
-      categoryTotals[f.category] = (categoryTotals[f.category] || 0) + f.amount;
+      categoryTotals[f.category] = (categoryTotals[f.category] || 0) + getRemainingAmount(f);
     });
     return Object.entries(categoryTotals).map(([cat, amt]) => ({
       category: cat,
@@ -75,14 +147,26 @@ export default function FeesPage() {
     })).sort((a, b) => b.percentage - a.percentage);
   }, [pending, totalDue]);
 
+  if (loading) {
+    return (
+      <div className="mx-auto w-full max-w-5xl space-y-6 lg:space-y-8">
+        <PageHeader title="Financial Center" subtitle="Manage your school fees, view outstanding balances, and access payment history." />
+        <div className="h-40 animate-pulse rounded-xl bg-zinc-100" />
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <SkeletonCard />
+          <SkeletonCard />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6 lg:space-y-8 relative">
-      
-      {/* Header */}
-      <section>
-        <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Financial Center</h1>
-        <p className="mt-1 text-sm text-zinc-500">Manage your school fees, view outstanding balances, and access payment history.</p>
-      </section>
+
+      <PageHeader
+        title="Financial Center"
+        subtitle="Manage your school fees, view outstanding balances, and access payment history."
+      />
 
       {/* Hero Balance Card */}
       <section className="relative overflow-hidden rounded-xl bg-zinc-900 px-6 py-6 shadow-lg sm:px-8 sm:py-8">
@@ -130,6 +214,16 @@ export default function FeesPage() {
            </div>
         </div>
       </section>
+
+      {/* Fee Structure Circular */}
+      {feeCircular && (
+        <section className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
+          <p className="mb-3 text-xs font-bold uppercase tracking-widest text-zinc-400">
+            {feeCircular.title} — {feeCircular.publishedBy} · {feeCircular.publishedDate}
+          </p>
+          <AttachmentList attachments={[feeCircular.file]} />
+        </section>
+      )}
 
       {/* Breakdown Bar */}
       {totalDue > 0 && (
@@ -187,43 +281,76 @@ export default function FeesPage() {
             ) : (
               <div className="divide-y divide-zinc-100">
                 {pending.map((fee) => (
-                  <div key={fee.id} className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between hover:bg-zinc-50/50 transition-colors group">
-                    <div className="flex items-start gap-4">
-                      <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border ${
-                        fee.status === "Overdue" ? "bg-rose-50 border-rose-100 text-rose-600" : "bg-blue-50 border-blue-100 text-blue-600"
-                      }`}>
-                        <CreditCard size={20} />
-                      </div>
-                      <div>
-                        <p className="text-base font-bold text-zinc-900 group-hover:text-blue-600 transition-colors">{fee.name}</p>
-                        <div className="mt-1 flex flex-wrap items-center gap-3">
-                          <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-widest ${
-                            fee.status === "Overdue" ? "bg-rose-100 text-rose-700" : "bg-amber-100 text-amber-700"
-                          }`}>
-                            {fee.status}
-                          </span>
-                          <span className="text-xs font-semibold text-zinc-500">{fee.category}</span>
-                          <span className="text-xs font-semibold text-zinc-500 flex items-center gap-1">
-                            <Clock3 size={12} /> Due {fee.dueDate}
-                          </span>
+                  <div key={fee.id} className="p-5 hover:bg-zinc-50/50 transition-colors group">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex items-start gap-4">
+                        <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border ${
+                          fee.status === "Overdue" ? "bg-rose-50 border-rose-100 text-rose-600" : "bg-blue-50 border-blue-100 text-blue-600"
+                        }`}>
+                          <CreditCard size={20} />
                         </div>
-                        {fee.concession && (
-                          <p className="mt-2 text-xs font-semibold text-emerald-600 flex items-center gap-1">
-                            <CheckCircle2 size={12} /> {fee.concession.label} Applied
-                          </p>
-                        )}
+                        <div>
+                          <p className="text-base font-bold text-zinc-900 group-hover:text-blue-600 transition-colors">{fee.name}</p>
+                          <div className="mt-1 flex flex-wrap items-center gap-3">
+                            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-widest ${
+                              fee.status === "Overdue" ? "bg-rose-100 text-rose-700" : "bg-amber-100 text-amber-700"
+                            }`}>
+                              {fee.status}
+                            </span>
+                            <span className="text-xs font-semibold text-zinc-500">{fee.category}</span>
+                            <span className="text-xs font-semibold text-zinc-500 flex items-center gap-1">
+                              <Clock3 size={12} /> Due {fee.dueDate}
+                            </span>
+                            {fee.installments && (
+                              <span className="text-xs font-semibold text-zinc-400">
+                                {fee.installments.filter((i) => i.status === "Paid").length}/{fee.installments.length} installments paid
+                              </span>
+                            )}
+                          </div>
+                          {fee.concession && (
+                            <p className="mt-2 text-xs font-semibold text-emerald-600 flex items-center gap-1">
+                              <CheckCircle2 size={12} /> {fee.concession.label} Applied
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-5 pl-16 sm:pl-0">
+                        <p className="text-xl font-black text-zinc-900">{formatINR(getRemainingAmount(fee))}</p>
+                        <button
+                          onClick={() => openPayModal([fee])}
+                          className="flex items-center gap-2 rounded-lg bg-zinc-900 px-4 py-2 text-sm font-bold text-white transition hover:bg-zinc-800 shadow-sm"
+                        >
+                          {fee.installments ? "Pay Full Balance" : "Pay"}
+                          <ArrowRight size={14} />
+                        </button>
                       </div>
                     </div>
-                    <div className="flex items-center gap-5 pl-16 sm:pl-0">
-                      <p className="text-xl font-black text-zinc-900">{formatINR(fee.amount)}</p>
-                      <button
-                        onClick={() => openPayModal([fee])}
-                        className="flex items-center gap-2 rounded-lg bg-zinc-900 px-4 py-2 text-sm font-bold text-white transition hover:bg-zinc-800 shadow-sm"
-                      >
-                        Pay
-                        <ArrowRight size={14} />
-                      </button>
-                    </div>
+
+                    {/* Installment breakdown */}
+                    {fee.installments && (
+                      <div className="mt-4 ml-16 space-y-2 border-l-2 border-zinc-100 pl-4">
+                        {fee.installments.map((inst) => (
+                          <div key={inst.id} className="flex items-center justify-between gap-3 text-sm">
+                            <div className="flex items-center gap-2.5">
+                              <span className="font-medium text-zinc-700">{inst.label}</span>
+                              <StatusBadge label={inst.status} variant={INSTALLMENT_STATUS_VARIANT[inst.status]} />
+                              <span className="text-xs text-zinc-400">Due {inst.dueDate}</span>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <span className="font-semibold text-zinc-700">{formatINR(inst.amount)}</span>
+                              {inst.status !== "Paid" && (
+                                <button
+                                  onClick={() => openPayInstallmentModal(fee, inst)}
+                                  className="rounded-lg border border-zinc-200 bg-white px-3 py-1 text-xs font-bold text-zinc-700 transition hover:bg-zinc-100"
+                                >
+                                  Pay
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -259,7 +386,8 @@ export default function FeesPage() {
                         onClick={() => {
                            setLastReceipt(p);
                            setPaymentStep("success"); // Reusing the success modal for receipt viewing
-                           setPayingFees([]); 
+                           setPayingFees([]);
+                           setPayingInstallment(null);
                         }}
                         className="flex items-center gap-1.5 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-bold text-zinc-700 transition hover:bg-zinc-100 shadow-sm"
                       >
@@ -276,14 +404,14 @@ export default function FeesPage() {
       </section>
 
       {/* PAYMENT / RECEIPT MODAL */}
-      {(payingFees.length > 0 || lastReceipt) && (
+      {(payingFees.length > 0 || payingInstallment || lastReceipt) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/60 p-4 backdrop-blur-sm animate-in fade-in duration-200">
           <div className={`w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl transition-all duration-300 ${
             paymentStep === "success" ? "bg-zinc-50" : "bg-white"
           }`}>
             
             {/* Modal Header */}
-            {paymentStep !== "success" && (
+            {paymentStep !== "success" && paymentStep !== "failed" && paymentStep !== "cancelled" && paymentStep !== "pendingVerification" && (
               <div className="flex items-center justify-between border-b border-zinc-100 px-6 py-4 bg-zinc-50/50">
                 <p className="text-sm font-bold text-zinc-900 uppercase tracking-widest">
                   Secure Checkout
@@ -299,7 +427,7 @@ export default function FeesPage() {
             <div className="px-6 py-6">
               
               {/* STEP 1: SELECT METHOD */}
-              {paymentStep === "select" && payingFees.length > 0 && (
+              {paymentStep === "select" && (payingFees.length > 0 || payingInstallment) && (
                 <div className="space-y-6">
                   {/* Fee Summary */}
                   <div className="rounded-xl bg-zinc-900 p-5 text-white shadow-lg relative overflow-hidden">
@@ -307,10 +435,8 @@ export default function FeesPage() {
                       <Wallet size={64} />
                     </div>
                     <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Paying For</p>
-                    <p className="mt-1 text-sm font-semibold text-zinc-200">
-                      {payingFees.length > 1 ? `Total Balance (${payingFees.length} items)` : payingFees[0].name}
-                    </p>
-                    <p className="mt-3 text-3xl font-black">{formatINR(payingFees.reduce((sum, f) => sum + f.amount, 0))}</p>
+                    <p className="mt-1 text-sm font-semibold text-zinc-200">{payingLabel}</p>
+                    <p className="mt-3 text-3xl font-black">{formatINR(payingTotal)}</p>
                   </div>
 
                   {/* Payment Method Selection */}
@@ -388,9 +514,20 @@ export default function FeesPage() {
                     onClick={handleConfirmPayment}
                     className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-3.5 text-sm font-bold text-white transition hover:bg-blue-700 shadow-lg shadow-blue-600/20"
                   >
-                    Pay {formatINR(payingFees.reduce((sum, f) => sum + f.amount, 0))}
+                    Pay {formatINR(payingTotal)}
                     <ArrowRight size={16} />
                   </button>
+
+                  {/* Prototype-only affordance to preview the failed-payment state */}
+                  <label className="flex items-center justify-center gap-2 text-[10px] font-medium text-zinc-400">
+                    <input
+                      type="checkbox"
+                      checked={simulateFailure}
+                      onChange={(e) => setSimulateFailure(e.target.checked)}
+                      className="h-3.5 w-3.5 rounded border-zinc-300 text-rose-600 focus:ring-rose-500"
+                    />
+                    Simulate a failed payment (demo)
+                  </label>
                 </div>
               )}
 
@@ -408,13 +545,94 @@ export default function FeesPage() {
                   <p className="mt-2 text-xs font-medium text-zinc-500 text-center max-w-xs">
                     Please do not close this window or press the back button. We are securely connecting to the bank.
                   </p>
+                  <button
+                    type="button"
+                    onClick={handleCancelPayment}
+                    className="mt-6 text-xs font-semibold text-zinc-400 hover:text-rose-600"
+                  >
+                    Cancel payment
+                  </button>
+                </div>
+              )}
+
+              {/* STEP: FAILED */}
+              {paymentStep === "failed" && (
+                <div className="flex flex-col items-center py-8 text-center">
+                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-rose-500 text-white shadow-lg shadow-rose-500/30 mb-4">
+                    <XCircle size={32} />
+                  </div>
+                  <p className="text-xl font-black text-zinc-900">Payment Failed</p>
+                  <p className="mt-2 max-w-xs text-sm text-zinc-500">
+                    Your bank or payment provider declined this transaction. No amount has been deducted.
+                  </p>
+                  <div className="mt-6 flex w-full gap-3">
+                    <button
+                      onClick={closeModal}
+                      className="flex-1 rounded-xl border border-zinc-200 bg-white py-3 text-sm font-bold text-zinc-700 transition hover:bg-zinc-50"
+                    >
+                      Close
+                    </button>
+                    <button
+                      onClick={() => { setSimulateFailure(false); setPaymentStep("select"); }}
+                      className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-zinc-900 py-3 text-sm font-bold text-white transition hover:bg-zinc-800"
+                    >
+                      <RotateCw size={14} /> Try Again
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* STEP: CANCELLED */}
+              {paymentStep === "cancelled" && (
+                <div className="flex flex-col items-center py-8 text-center">
+                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-zinc-200 text-zinc-600 mb-4">
+                    <X size={32} />
+                  </div>
+                  <p className="text-xl font-black text-zinc-900">Payment Cancelled</p>
+                  <p className="mt-2 max-w-xs text-sm text-zinc-500">
+                    You cancelled this payment before it completed. No amount has been deducted.
+                  </p>
+                  <div className="mt-6 flex w-full gap-3">
+                    <button
+                      onClick={closeModal}
+                      className="flex-1 rounded-xl border border-zinc-200 bg-white py-3 text-sm font-bold text-zinc-700 transition hover:bg-zinc-50"
+                    >
+                      Close
+                    </button>
+                    <button
+                      onClick={() => setPaymentStep("select")}
+                      className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-zinc-900 py-3 text-sm font-bold text-white transition hover:bg-zinc-800"
+                    >
+                      <RotateCw size={14} /> Try Again
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* STEP: PENDING VERIFICATION (e.g. Cheque) */}
+              {paymentStep === "pendingVerification" && (
+                <div className="flex flex-col items-center py-8 text-center">
+                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-amber-100 text-amber-600 mb-4">
+                    <HourglassIcon size={30} />
+                  </div>
+                  <p className="text-xl font-black text-zinc-900">Pending Verification</p>
+                  <p className="mt-2 max-w-xs text-sm text-zinc-500">
+                    Your {selectedMethod.toLowerCase()} payment has been recorded and is awaiting bank/school
+                    verification. This fee will be marked paid once confirmed.
+                  </p>
+                  <button
+                    onClick={closeModal}
+                    className="mt-6 w-full rounded-xl bg-zinc-900 py-3 text-sm font-bold text-white transition hover:bg-zinc-800"
+                  >
+                    Close
+                  </button>
                 </div>
               )}
 
               {/* STEP 3: SUCCESS / RECEIPT VIEW */}
               {paymentStep === "success" && lastReceipt && (
                 <div className="space-y-6">
-                  {payingFees.length > 0 && ( // Only show success checkmark if we just paid, not if we are just viewing past receipt
+                  {(payingFees.length > 0 || payingInstallment) && ( // Only show success checkmark if we just paid, not if we are just viewing past receipt
                     <div className="flex flex-col items-center pt-2 pb-4">
                       <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500 text-white shadow-lg shadow-emerald-500/30 mb-4 animate-in zoom-in">
                         <CheckCircle2 size={32} />

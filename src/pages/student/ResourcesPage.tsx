@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from "react";
 import {
-  Folder, FileText, Video, File, PresentationIcon, Download, Search, 
-  ChevronRight, X, Clock, MapPin, Tag, Box, PlayCircle
+  Folder, FileText, File, PresentationIcon, Download, Search,
+  ChevronRight, X, Clock, Box, PlayCircle
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { getResources, type Resource, type ResourceFolder } from "../../services/mock/resources";

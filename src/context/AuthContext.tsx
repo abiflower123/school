@@ -23,6 +23,10 @@ export type AuthUser = {
   parentAccount?: ParentAccount;
 };
 
+export type LoginErrorCode = "invalid" | "locked" | "network";
+
+export type LoginResult = { success: boolean; error?: string; code?: LoginErrorCode };
+
 export type AuthContextValue = {
   user: AuthUser | null;
   selectedChild: Student | null;
@@ -30,7 +34,7 @@ export type AuthContextValue = {
   isParent: boolean;
   isStudent: boolean;
   isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  login: (email: string, password: string) => Promise<LoginResult>;
   logout: () => void;
   switchChild: (studentId: string) => void;
   getInitials: (name: string) => string;
@@ -40,6 +44,12 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 const SELECTED_CHILD_KEY = "ravion_selected_child";
 const AUTH_USER_KEY = "ravion_auth_user";
+
+// Reserved demo identifiers used only to let the prototype UI demonstrate
+// account-locked and network-unavailable states without a real backend.
+// Remove once a real API drives these outcomes.
+const DEMO_LOCKED_EMAIL = "locked.parent@example.com";
+const DEMO_NETWORK_ERROR_EMAIL = "offline.parent@example.com";
 
 export function AuthProvider({ children: reactChildren }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(() => {
@@ -81,7 +91,24 @@ export function AuthProvider({ children: reactChildren }: { children: React.Reac
   })();
 
   const login = useCallback(
-    async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
+    async (email: string, password: string): Promise<LoginResult> => {
+      const normalizedEmail = email.trim().toLowerCase();
+
+      if (normalizedEmail === DEMO_LOCKED_EMAIL) {
+        return {
+          success: false,
+          code: "locked",
+          error: "This account has been temporarily locked. Please contact the school office.",
+        };
+      }
+      if (normalizedEmail === DEMO_NETWORK_ERROR_EMAIL) {
+        return {
+          success: false,
+          code: "network",
+          error: "We couldn't reach the school server. Check your connection and try again.",
+        };
+      }
+
       // Check parent accounts
       const parentAcc = mockParentAccounts.find(
         (a) => a.email.toLowerCase() === email.toLowerCase() && a.password === password
@@ -122,7 +149,7 @@ export function AuthProvider({ children: reactChildren }: { children: React.Reac
         return { success: true };
       }
 
-      return { success: false, error: "Invalid email or password." };
+      return { success: false, code: "invalid", error: "Invalid email or password." };
     },
     []
   );

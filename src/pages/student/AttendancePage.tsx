@@ -34,6 +34,12 @@ import {
   type LeaveRequest,
   type LeaveType,
 } from "../../services/mock/leave";
+import { StatusBadge, type StatusVariant } from "../../components/ui/StatusBadge";
+import { EmptyState } from "../../components/ui/EmptyState";
+import { PageHeader } from "../../components/ui/PageHeader";
+import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
+import { SkeletonCard } from "../../components/ui/Skeleton";
+import { useMockLoading } from "../../hooks/useMockLoading";
 
 const STATUS_STYLES: Record<AttendanceStatus, string> = {
   Present: "bg-emerald-50 text-emerald-700",
@@ -41,6 +47,13 @@ const STATUS_STYLES: Record<AttendanceStatus, string> = {
   Late: "bg-amber-50 text-amber-700",
   Holiday: "bg-zinc-100 text-zinc-600",
   Leave: "bg-violet-50 text-violet-700",
+};
+
+const LEAVE_STATUS_VARIANT: Record<LeaveRequest["status"], StatusVariant> = {
+  Approved: "success",
+  Rejected: "danger",
+  Cancelled: "neutral",
+  Pending: "warning",
 };
 
 const CELL_COLORS: Record<AttendanceStatus, string> = {
@@ -109,6 +122,9 @@ export default function AttendancePage() {
   const [duration, setDuration] = useState<"Full Day" | "Half Day (Morning)" | "Half Day (Afternoon)">("Full Day");
   const [reason, setReason] = useState("");
   const [attachmentName, setAttachmentName] = useState<string | null>(null);
+  const [cancelTargetId, setCancelTargetId] = useState<string | null>(null);
+
+  const loading = useMockLoading([sid]);
 
   // Calendar rendering setup
   const year = currentDate.getFullYear();
@@ -142,8 +158,13 @@ export default function AttendancePage() {
     }, 4000);
   };
 
-  const handleCancelLeave = (id: string) => {
-    setLeaveRequests(cancelLeaveRequest(sid, id));
+  const requestCancelLeave = (id: string) => {
+    setCancelTargetId(id);
+  };
+
+  const confirmCancelLeave = () => {
+    if (cancelTargetId) setLeaveRequests(cancelLeaveRequest(sid, cancelTargetId));
+    setCancelTargetId(null);
   };
 
   const handleAppeal = (date: string) => {
@@ -163,33 +184,32 @@ export default function AttendancePage() {
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6 lg:space-y-8">
-      {/* Header */}
-      <section className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Attendance & Leave</h1>
-          <p className="mt-1 text-sm text-zinc-500">Track your attendance and manage leave requests in one place.</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={handleDownloadReport}
-            disabled={isDownloading}
-            className="flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-4 py-2.5 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 shadow-sm disabled:opacity-50"
-          >
-            <Download size={16} />
-            {isDownloading ? "Generating..." : "Download Report"}
-          </button>
-          <button
-            onClick={() => {
-              setActiveTab("leaves");
-              setShowLeaveForm(true);
-            }}
-            className="flex items-center gap-2 rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-zinc-800 shadow-sm"
-          >
-            <Plus size={16} />
-            Apply Leave
-          </button>
-        </div>
-      </section>
+      <PageHeader
+        title="Attendance & Leave"
+        subtitle="Track your attendance and manage leave requests in one place."
+        actions={
+          <>
+            <button
+              onClick={handleDownloadReport}
+              disabled={isDownloading}
+              className="flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-4 py-2.5 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 shadow-sm disabled:opacity-50"
+            >
+              <Download size={16} />
+              {isDownloading ? "Generating..." : "Download Report"}
+            </button>
+            <button
+              onClick={() => {
+                setActiveTab("leaves");
+                setShowLeaveForm(true);
+              }}
+              className="flex items-center gap-2 rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-zinc-800 shadow-sm"
+            >
+              <Plus size={16} />
+              Apply Leave
+            </button>
+          </>
+        }
+      />
 
       {/* Proactive Shortage Alert */}
       {summary.shortage && (
@@ -216,6 +236,13 @@ export default function AttendancePage() {
       )}
 
       {/* Summary Cards */}
+      {loading ? (
+        <section className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <SkeletonCard key={i} />
+          ))}
+        </section>
+      ) : (
       <section className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         {[
           { label: "Overall Attendance", value: `${summary.overallPercentage}%`, sub: "Total up to date", icon: CalendarCheck, color: "text-blue-600", bg: "bg-blue-50" },
@@ -237,6 +264,7 @@ export default function AttendancePage() {
           </div>
         ))}
       </section>
+      )}
 
       {/* Main Tabbed Interface */}
       <section className="rounded-2xl border border-zinc-200 bg-white shadow-sm overflow-hidden">
@@ -284,11 +312,11 @@ export default function AttendancePage() {
           {activeTab === "overview" && (
             <div className="divide-y divide-zinc-100 px-4 sm:px-0">
               {monthlyRecords.length === 0 ? (
-                <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-zinc-200 py-16 text-center">
-                  <CalendarCheck size={32} className="text-zinc-300 mb-4" strokeWidth={1.5} />
-                  <h4 className="text-sm font-bold text-zinc-900">No Records Found</h4>
-                  <p className="mt-1 text-sm text-zinc-500">There are no attendance logs for {monthStrLong} {yearStr}.</p>
-                </div>
+                <EmptyState
+                  icon={CalendarCheck}
+                  title="No records found"
+                  message={`There are no attendance logs for ${monthStrLong} ${yearStr}.`}
+                />
               ) : (
                 monthlyRecords.map((r) => (
                   <div key={r.date} className="group flex flex-col sm:flex-row sm:items-center justify-between gap-4 py-4 pr-2">
@@ -526,11 +554,11 @@ export default function AttendancePage() {
               {/* Leave List */}
               <div className="grid grid-cols-1 gap-4">
                 {leaveRequests.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-zinc-200 py-16 text-center">
-                    <FileText size={32} className="text-zinc-300 mb-4" strokeWidth={1.5} />
-                    <h4 className="text-sm font-bold text-zinc-900">No Leave Requests</h4>
-                    <p className="mt-1 text-sm text-zinc-500">You haven't applied for any leave yet.</p>
-                  </div>
+                  <EmptyState
+                    icon={FileText}
+                    title="No leave requests"
+                    message="You haven't applied for any leave yet."
+                  />
                 ) : (
                   <>
                     {displayedLeaves.map((req) => (
@@ -538,14 +566,7 @@ export default function AttendancePage() {
                          <div>
                            <div className="flex items-center gap-3 mb-2">
                              <h4 className="font-bold text-zinc-900">{req.type}</h4>
-                             <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest ${
-                               req.status === "Approved" ? "bg-emerald-50 text-emerald-700" :
-                               req.status === "Rejected" ? "bg-rose-50 text-rose-700" :
-                               req.status === "Cancelled" ? "bg-zinc-100 text-zinc-500" :
-                               "bg-amber-50 text-amber-700"
-                             }`}>
-                               {req.status}
-                             </span>
+                             <StatusBadge label={req.status} variant={LEAVE_STATUS_VARIANT[req.status]} />
                            </div>
                            <p className="text-sm text-zinc-600 mb-3">{req.reason}</p>
                            <div className="flex flex-wrap items-center gap-4 text-xs font-medium text-zinc-500">
@@ -571,7 +592,7 @@ export default function AttendancePage() {
                             {req.status === "Pending" && (
                               <button
                                 type="button"
-                                onClick={() => handleCancelLeave(req.id)}
+                                onClick={() => requestCancelLeave(req.id)}
                                 className="rounded-md border border-rose-200 px-3 py-1.5 text-xs font-bold text-rose-600 transition hover:bg-rose-50"
                               >
                                 Cancel
@@ -625,6 +646,16 @@ export default function AttendancePage() {
           )}
         </div>
       </section>
+
+      <ConfirmDialog
+        open={cancelTargetId !== null}
+        title="Cancel this leave request?"
+        message="This will withdraw your pending leave application. You can submit a new one anytime."
+        confirmLabel="Cancel Request"
+        cancelLabel="Keep Request"
+        onConfirm={confirmCancelLeave}
+        onCancel={() => setCancelTargetId(null)}
+      />
     </div>
   );
 }

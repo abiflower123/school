@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
-  Users, CalendarDays, User, ChevronRight, CheckCircle2, Clock3, X,
-  Trophy, BookOpen, Music, Microscope, MonitorPlay, CalendarHeart, 
+  Users, CalendarDays, User, CheckCircle2, Clock3, X,
+  Trophy, BookOpen, Music, Microscope, MonitorPlay, CalendarHeart,
   MapPin, Sparkles, MoveRight
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
@@ -122,6 +122,14 @@ export default function ClubsPage() {
                   <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border ${theme.light} ${theme.text} ${theme.border} group-hover:scale-110 transition-transform`}>
                     {theme.icon}
                   </div>
+                  {mem && (
+                    <span className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest ${
+                      mem.status === "Member" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
+                    }`}>
+                      {mem.status === "Member" ? <CheckCircle2 size={10} /> : <Clock3 size={10} />}
+                      {mem.status}
+                    </span>
+                  )}
                 </div>
 
                 <div className="flex-1">

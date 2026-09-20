@@ -2,6 +2,8 @@
 // Mock Scholarship & Financial Concession Service
 // ============================================================
 
+import type { AttachmentItem } from "../../components/ui/AttachmentList";
+
 export type ScholarshipCategory = "Government" | "Institutional Merit" | "Sports Excellence" | "Family & Welfare";
 export type ScholarshipStatus = "Not Applied" | "Submitted" | "Under Review" | "Approved" | "Disbursed" | "Rejected";
 
@@ -19,6 +21,9 @@ export type Scholarship = {
   daysRemaining: number;
   requiredDocs: string[];
   disbursementType: "Tuition Fee Rebate" | "Direct Bank Credit";
+  publishedBy: string;
+  postedDate: string;
+  recommendedBy?: string;
 };
 
 export type ApplicationStep = {
@@ -38,7 +43,7 @@ export type ScholarshipApplication = {
   amountGranted: string;
   disbursementStatus: "Pending Scrutiny" | "Credited to Fee Ledger" | "Bank Transfer Completed" | "Action Needed";
   remarks?: string;
-  documentsSubmitted: string[];
+  documentsSubmitted: AttachmentItem[];
   timeline: ApplicationStep[];
 };
 
@@ -61,6 +66,8 @@ const availableScholarships: Scholarship[] = [
     daysRemaining: 41,
     requiredDocs: ["Grade 9 Mark Sheet", "Aadhaar Card", "Income Certificate (< ₹2.5 Lakhs/yr)"],
     disbursementType: "Tuition Fee Rebate",
+    publishedBy: "School Administration",
+    postedDate: "1 Sep 2026",
   },
   {
     id: "SCH2",
@@ -79,6 +86,9 @@ const availableScholarships: Scholarship[] = [
     daysRemaining: 56,
     requiredDocs: ["Term 1 Official Mark Statement", "Class Teacher Recommendation Letter"],
     disbursementType: "Tuition Fee Rebate",
+    publishedBy: "Ravion Educational Trust",
+    postedDate: "3 Sep 2026",
+    recommendedBy: "Mrs. Kavitha Sundaram (Class Teacher)",
   },
   {
     id: "SCH3",
@@ -97,6 +107,8 @@ const availableScholarships: Scholarship[] = [
     daysRemaining: 51,
     requiredDocs: ["EMIS Student ID Proof", "Aadhaar Card", "Parent Savings Bank Passbook"],
     disbursementType: "Direct Bank Credit",
+    publishedBy: "School Administration",
+    postedDate: "28 Aug 2026",
   },
   {
     id: "SCH4",
@@ -115,6 +127,8 @@ const availableScholarships: Scholarship[] = [
     daysRemaining: 180,
     requiredDocs: ["Both Siblings Admission ID Cards", "Parent Identity Proof"],
     disbursementType: "Tuition Fee Rebate",
+    publishedBy: "Accounts Department",
+    postedDate: "10 Jun 2026",
   },
   {
     id: "SCH5",
@@ -133,6 +147,9 @@ const availableScholarships: Scholarship[] = [
     daysRemaining: 86,
     requiredDocs: ["Official Sports Medalist Certificate", "Physical Director Sign-off"],
     disbursementType: "Direct Bank Credit",
+    publishedBy: "Sports Development Authority of Tamil Nadu",
+    postedDate: "15 Sep 2026",
+    recommendedBy: "Mr. Suresh Babu (Physical Education)",
   },
 ];
 
@@ -147,7 +164,11 @@ const applicationsSTU001: ScholarshipApplication[] = [
     amountGranted: "₹10,000 / Year",
     disbursementStatus: "Credited to Fee Ledger",
     remarks: "Verified & Approved by State Nodal Officer. ₹5,000 credited towards Term 1 fee ledger.",
-    documentsSubmitted: ["Grade 9 Mark Sheet", "Aadhaar Card", "Income Certificate"],
+    documentsSubmitted: [
+      { name: "Grade 9 Mark Sheet.pdf", type: "PDF", size: "410 KB" },
+      { name: "Aadhaar Card.pdf", type: "PDF", size: "180 KB" },
+      { name: "Income Certificate.pdf", type: "PDF", size: "260 KB" },
+    ],
     timeline: [
       { title: "Application Submitted", status: "completed", date: "05 Sep 2026", note: "Application ID: SAPP001" },
       { title: "Document Scrutiny", status: "completed", date: "08 Sep 2026", note: "Approved by School Nodal Officer" },
@@ -165,7 +186,7 @@ const applicationsSTU001: ScholarshipApplication[] = [
     amountGranted: "₹15,000 / Year",
     disbursementStatus: "Pending Scrutiny",
     remarks: "Class rank & term 1 marks under review by Academic Council.",
-    documentsSubmitted: ["Term 1 Official Mark Statement"],
+    documentsSubmitted: [{ name: "Term 1 Official Mark Statement.pdf", type: "PDF", size: "320 KB" }],
     timeline: [
       { title: "Application Submitted", status: "completed", date: "14 Sep 2026" },
       { title: "Academic Council Review", status: "current", note: "Meeting scheduled for 25 Sep" },
@@ -186,7 +207,10 @@ const applicationsSTU002: ScholarshipApplication[] = [
     amountGranted: "₹7,500 Concession",
     disbursementStatus: "Credited to Fee Ledger",
     remarks: "Concession applied automatically to Term 2 tuition fee.",
-    documentsSubmitted: ["Sibling ID Cards", "Parent Aadhaar"],
+    documentsSubmitted: [
+      { name: "Sibling ID Cards.pdf", type: "PDF", size: "300 KB" },
+      { name: "Parent Aadhaar.pdf", type: "PDF", size: "150 KB" },
+    ],
     timeline: [
       { title: "Application Submitted", status: "completed", date: "12 Jun 2026" },
       { title: "Admin Clearance", status: "completed", date: "14 Jun 2026" },
@@ -215,7 +239,7 @@ export function applyForScholarship(
   _studentId: string,
   applications: ScholarshipApplication[],
   scholarship: Scholarship,
-  documents: string[] = [],
+  documents: AttachmentItem[] = [],
   reason: string = ""
 ): ScholarshipApplication[] {
   const todayStr = new Date().toLocaleDateString("en-GB", {
@@ -234,7 +258,7 @@ export function applyForScholarship(
     amountGranted: scholarship.amount,
     disbursementStatus: "Pending Scrutiny",
     remarks: reason ? `Reason noted: ${reason}` : "Application logged for review by School Administration.",
-    documentsSubmitted: documents.length > 0 ? documents : scholarship.requiredDocs,
+    documentsSubmitted: documents,
     timeline: [
       { title: "Application Submitted", status: "completed", date: todayStr, note: `Disbursement: ${scholarship.disbursementType}` },
       { title: "School Level Verification", status: "current", note: "Under review by Nodal Officer" },

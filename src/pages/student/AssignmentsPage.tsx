@@ -3,23 +3,29 @@ import {
   ClipboardList,
   Search,
   X,
-  UploadCloud,
   CheckCircle2,
   Clock,
   AlertCircle,
-  FileText,
   MessageSquare,
   ArrowRight,
-  ArrowUpDown
+  ArrowUpDown,
+  Paperclip
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { getAssignments, type Assignment } from "../../services/mock/assignments";
+import { StatusBadge, type StatusVariant } from "../../components/ui/StatusBadge";
+import { EmptyState } from "../../components/ui/EmptyState";
+import { PageHeader } from "../../components/ui/PageHeader";
+import { SkeletonCard, SkeletonRow } from "../../components/ui/Skeleton";
+import { useMockLoading } from "../../hooks/useMockLoading";
+import { PublishedByRow } from "../../components/ui/PublishedByRow";
+import { AttachmentList } from "../../components/ui/AttachmentList";
 
-const STATUS_STYLES: Record<Assignment["status"], string> = {
-  Pending: "bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-600/20",
-  Submitted: "bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-600/20",
-  Overdue: "bg-rose-50 text-rose-700 ring-1 ring-inset ring-rose-600/20",
-  Graded: "bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-600/20",
+const STATUS_VARIANT: Record<Assignment["status"], StatusVariant> = {
+  Pending: "warning",
+  Submitted: "info",
+  Overdue: "danger",
+  Graded: "success",
 };
 
 export default function AssignmentsPage() {
@@ -31,10 +37,7 @@ export default function AssignmentsPage() {
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<"Due Date" | "Assigned Date">("Due Date");
   const [detailItem, setDetailItem] = useState<Assignment | null>(null);
-  
-  // Submission Simulation State
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submittedFile, setSubmittedFile] = useState<string | null>(null);
+  const loading = useMockLoading([sid]);
 
   const FILTERS = ["All", "Pending", "Submitted", "Graded", "Overdue", "Homework"] as const;
 
@@ -81,30 +84,21 @@ export default function AssignmentsPage() {
     return groups;
   }, [sorted]);
 
-  const handleSimulateSubmit = () => {
-    if (!submittedFile) return;
-    setIsSubmitting(true);
-    setTimeout(() => {
-      setIsSubmitting(false);
-      // In a real app, we would update the backend.
-      // Here we just close the modal for the simulation.
-      setDetailItem(null);
-      setSubmittedFile(null);
-      alert("Assignment submitted successfully!");
-    }, 1500);
-  };
-
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6 lg:space-y-8">
-      {/* Header */}
-      <section className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Assignments & Homework</h1>
-          <p className="mt-1 text-sm text-zinc-500">Manage your coursework and submit assignments digitally.</p>
-        </div>
-      </section>
+      <PageHeader
+        title="Assignments & Homework"
+        subtitle="View your coursework, due dates and teacher-updated status."
+      />
 
       {/* Summary Cards */}
+      {loading ? (
+        <section className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <SkeletonCard key={i} />
+          ))}
+        </section>
+      ) : (
       <section className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         {[
           { label: "Total Tasks", value: allAssignments.length, color: "text-zinc-900", icon: ClipboardList, bg: "bg-zinc-100" },
@@ -125,6 +119,7 @@ export default function AssignmentsPage() {
           </div>
         ))}
       </section>
+      )}
 
       {/* Search & Filters */}
       <section className="rounded-2xl border border-zinc-200 bg-white p-2 shadow-sm">
@@ -170,12 +165,19 @@ export default function AssignmentsPage() {
       </section>
 
       {/* Assignment List */}
-      {filtered.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-zinc-200 py-20 text-center bg-white shadow-sm">
-          <ClipboardList size={40} className="mx-auto text-zinc-300" strokeWidth={1.5} />
-          <p className="mt-4 text-sm font-bold text-zinc-900">No Assignments Found</p>
-          <p className="mt-1 text-sm text-zinc-500">Try adjusting your filters or search query.</p>
+      {loading ? (
+        <div className="divide-y divide-zinc-100 rounded-2xl border border-zinc-200 bg-white shadow-sm">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <SkeletonRow key={i} />
+          ))}
         </div>
+      ) : filtered.length === 0 ? (
+        <EmptyState
+          icon={ClipboardList}
+          title="No assignments found"
+          message="Try adjusting your filters or search query."
+          className="bg-white shadow-sm"
+        />
       ) : (
         <section className="space-y-8">
           {Object.entries(grouped).map(([groupName, items]) => {
@@ -200,9 +202,10 @@ export default function AssignmentsPage() {
                         <div>
                           <div className="flex items-center gap-2 flex-wrap mb-1">
                             <span className="text-xs font-bold uppercase tracking-wider text-zinc-400">{item.subject}</span>
-                            {item.isHomework && <span className="rounded-full bg-cyan-50 px-2 py-0.5 text-[9px] font-bold text-cyan-700 uppercase tracking-widest">Homework</span>}
+                            <span className="rounded-full bg-cyan-50 px-2 py-0.5 text-[9px] font-bold text-cyan-700 uppercase tracking-widest">{item.type}</span>
                           </div>
                           <h3 className="text-base font-bold text-zinc-900 leading-snug">{item.title}</h3>
+                          <p className="mt-1 text-xs text-zinc-400">{item.teacherName}</p>
                           <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs font-medium text-zinc-500">
                             <span className="flex items-center gap-1.5">
                                <Clock size={14} className="text-zinc-400" />
@@ -211,7 +214,13 @@ export default function AssignmentsPage() {
                             {item.marks && (
                               <span className="flex items-center gap-1.5 font-bold text-emerald-700">
                                 <CheckCircle2 size={14} />
-                                Score: {item.marks}
+                                Score: {item.marks}{item.maxMarks ? `/${item.maxMarks}` : ""}
+                              </span>
+                            )}
+                            {item.attachments && item.attachments.length > 0 && (
+                              <span className="flex items-center gap-1.5">
+                                <Paperclip size={14} className="text-zinc-400" />
+                                {item.attachments.length} attachment{item.attachments.length !== 1 ? "s" : ""}
                               </span>
                             )}
                           </div>
@@ -219,9 +228,7 @@ export default function AssignmentsPage() {
                       </div>
 
                       <div className="flex flex-row sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-3 border-t border-zinc-100 pt-4 sm:border-0 sm:pt-0">
-                         <span className={`rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-widest ${STATUS_STYLES[item.status]}`}>
-                           {item.status}
-                         </span>
+                         <StatusBadge label={item.status} variant={STATUS_VARIANT[item.status]} />
                          <button
                            onClick={() => setDetailItem(item)}
                            className="flex items-center gap-1.5 rounded-lg bg-zinc-50 px-4 py-2 text-xs font-bold text-zinc-700 transition hover:bg-zinc-100 hover:text-zinc-900"
@@ -256,18 +263,26 @@ export default function AssignmentsPage() {
             
             {/* Scrollable Content */}
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
-              
+
+              {/* Posted by */}
+              {detailItem.teacherName && (
+                <PublishedByRow
+                  name={detailItem.teacherName}
+                  avatar={detailItem.teacherAvatar}
+                  role={detailItem.type}
+                  date={`Assigned ${detailItem.assignedDate}`}
+                />
+              )}
+
               {/* Metadata row */}
               <div className="flex flex-wrap items-center gap-4 text-sm">
-                 <span className={`rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-widest ${STATUS_STYLES[detailItem.status]}`}>
-                   {detailItem.status}
-                 </span>
+                 <StatusBadge label={detailItem.status} variant={STATUS_VARIANT[detailItem.status]} />
                  <div className="flex items-center gap-1.5 text-zinc-500 font-medium">
                    <Clock size={16} /> Due: {detailItem.dueDate}
                  </div>
                  {detailItem.marks && (
                    <div className="flex items-center gap-1.5 font-bold text-emerald-700">
-                     <CheckCircle2 size={16} /> Score: {detailItem.marks}
+                     <CheckCircle2 size={16} /> Score: {detailItem.marks}{detailItem.maxMarks ? `/${detailItem.maxMarks}` : ""}
                    </div>
                  )}
               </div>
@@ -279,6 +294,14 @@ export default function AssignmentsPage() {
                   {detailItem.description}
                 </div>
               </div>
+
+              {/* Attachments */}
+              {detailItem.attachments && detailItem.attachments.length > 0 && (
+                <div>
+                  <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-400 mb-2">Attachments</h3>
+                  <AttachmentList attachments={detailItem.attachments} />
+                </div>
+              )}
 
               {/* Teacher Feedback */}
               {detailItem.teacherFeedback && (

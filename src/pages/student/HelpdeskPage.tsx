@@ -7,6 +7,7 @@ import {
   MessageSquare,
   Plus,
   Lock,
+  LockOpen,
   Star,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
@@ -15,18 +16,22 @@ import {
   addTicket,
   addReply,
   closeTicket,
+  reopenTicket,
   rateResolution,
   type TicketCategory,
   type SupportTicket,
+  type TicketStatus,
 } from "../../services/mock/helpdesk";
+import { StatusBadge, type StatusVariant } from "../../components/ui/StatusBadge";
+import { EmptyState } from "../../components/ui/EmptyState";
 
 const CATEGORIES: TicketCategory[] = ["Academic", "Attendance", "Finance", "Transport", "Facilities", "App Issue", "Other"];
 
-const statusStyles = {
-  Open: "bg-blue-50 text-blue-700",
-  "In Review": "bg-amber-50 text-amber-700",
-  Resolved: "bg-emerald-50 text-emerald-700",
-  Closed: "bg-zinc-100 text-zinc-600",
+const STATUS_VARIANT: Record<TicketStatus, StatusVariant> = {
+  Open: "info",
+  "In Review": "warning",
+  Resolved: "success",
+  Closed: "neutral",
 };
 
 export default function HelpdeskPage() {
@@ -67,6 +72,13 @@ export default function HelpdeskPage() {
   const handleCloseTicket = () => {
     if (!selectedTicket) return;
     const updated = closeTicket(tickets, selectedTicket.id);
+    setTickets(updated);
+    setSelectedTicket(updated.find((t) => t.id === selectedTicket.id) ?? null);
+  };
+
+  const handleReopenTicket = () => {
+    if (!selectedTicket) return;
+    const updated = reopenTicket(tickets, selectedTicket.id);
     setTickets(updated);
     setSelectedTicket(updated.find((t) => t.id === selectedTicket.id) ?? null);
   };
@@ -132,11 +144,12 @@ export default function HelpdeskPage() {
       {view === "list" && (
         <section className="overflow-hidden rounded-xl border border-zinc-200 bg-white">
           {tickets.length === 0 ? (
-            <div className="px-6 py-12 text-center">
-              <HelpCircle size={36} className="mx-auto text-zinc-300" strokeWidth={1.5} />
-              <p className="mt-3 text-sm font-medium text-zinc-600">No tickets yet</p>
-              <p className="mt-1 text-xs text-zinc-400">Click "New Ticket" to raise a request or complaint.</p>
-            </div>
+            <EmptyState
+              icon={HelpCircle}
+              dashed={false}
+              title="No tickets yet"
+              message='Click "New Ticket" to raise a request or complaint.'
+            />
           ) : (
             <div className="divide-y divide-zinc-100">
               {tickets.map((ticket) => (
@@ -152,9 +165,7 @@ export default function HelpdeskPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="text-sm font-semibold text-zinc-900 truncate">{ticket.subject}</p>
-                      <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${statusStyles[ticket.status]}`}>
-                        {ticket.status}
-                      </span>
+                      <StatusBadge label={ticket.status} variant={STATUS_VARIANT[ticket.status]} />
                     </div>
                     <p className="mt-0.5 text-xs text-zinc-400">
                       {ticket.ticketNumber} · {ticket.category} · {ticket.submittedDate}
@@ -244,9 +255,7 @@ export default function HelpdeskPage() {
                   {selectedTicket.ticketNumber} · {selectedTicket.category} · {selectedTicket.submittedDate}
                 </p>
               </div>
-              <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${statusStyles[selectedTicket.status]}`}>
-                {selectedTicket.status}
-              </span>
+              <StatusBadge label={selectedTicket.status} variant={STATUS_VARIANT[selectedTicket.status]} />
             </div>
           </div>
           {/* Original message */}
@@ -295,6 +304,20 @@ export default function HelpdeskPage() {
               </button>
             </div>
           )}
+          {/* Reopen a closed ticket */}
+          {selectedTicket.status === "Closed" && (
+            <div className="border-t border-zinc-100 px-5 py-4">
+              <button
+                type="button"
+                onClick={handleReopenTicket}
+                className="flex items-center gap-1.5 rounded-lg border border-zinc-200 px-3.5 py-2 text-xs font-medium text-zinc-600 transition hover:bg-zinc-50"
+              >
+                <LockOpen size={13} />
+                Reopen Ticket
+              </button>
+            </div>
+          )}
+
           {/* Reply form */}
           {selectedTicket.status !== "Closed" && (
             <form onSubmit={handleSendReply} className="border-t border-zinc-100 p-4">

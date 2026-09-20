@@ -110,6 +110,10 @@ export function closeTicket(tickets: SupportTicket[], ticketId: string): Support
   return tickets.map((t) => (t.id === ticketId ? { ...t, status: "Closed" as const } : t));
 }
 
+export function reopenTicket(tickets: SupportTicket[], ticketId: string): SupportTicket[] {
+  return tickets.map((t) => (t.id === ticketId ? { ...t, status: "Open" as const } : t));
+}
+
 export function rateResolution(tickets: SupportTicket[], ticketId: string, rating: 1 | 2 | 3 | 4 | 5): SupportTicket[] {
   return tickets.map((t) => (t.id === ticketId ? { ...t, resolutionRating: rating } : t));
 }

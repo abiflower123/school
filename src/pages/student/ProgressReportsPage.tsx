@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo } from "react";
 import {
-  Download, FileText, TrendingUp, Award, Target,
+  Download, TrendingUp, Award,
   ChevronRight, BookOpen, AlertCircle, TrendingDown,
-  CheckCircle2, BookOpenCheck, Clock, CheckCircle, Lightbulb,
+  Lightbulb,
   X,
   History
 } from "lucide-react";
@@ -17,7 +17,6 @@ import {
   getSubjectPerformanceList,
   getPerformanceTrends,
   getAssessmentHistory,
-  type Assessment,
   type SubjectPerformance
 } from "../../services/mock/academicProgress";
 import { getTermReports, type TermReport } from "../../services/mock/exams";

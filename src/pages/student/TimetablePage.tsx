@@ -1,7 +1,5 @@
 import { useState, useEffect } from "react";
 import {
-  Clock3,
-  MapPin,
   UserRound,
   BookOpen,
   Calculator,
@@ -20,7 +18,7 @@ import {
   ChevronRight
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
-import { getTimetableForDay, DAYS, type Period } from "../../services/mock/timetable";
+import { getTimetableForDay, DAYS } from "../../services/mock/timetable";
 
 // ─── Helpers ───────────────────────────────────────────────
 

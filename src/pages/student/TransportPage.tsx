@@ -1,6 +1,8 @@
-import { Bus, MapPin, Phone, Clock3, Navigation, CheckCircle2 } from "lucide-react";
+import { Bus, MapPin, Phone, Clock3, Navigation, CheckCircle2, Satellite } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { getTransportInfo } from "../../services/mock/transport";
+import { PageHeader } from "../../components/ui/PageHeader";
+import { EmptyState } from "../../components/ui/EmptyState";
 
 export default function TransportPage() {
   const { selectedChild } = useAuth();
@@ -8,16 +10,13 @@ export default function TransportPage() {
 
   if (!info) {
     return (
-      <div className="mx-auto w-full max-w-3xl">
-        <section>
-          <h1 className="text-2xl font-semibold tracking-tight text-zinc-900">Transport</h1>
-          <p className="mt-1 text-sm text-zinc-500">School bus information and route details.</p>
-        </section>
-        <div className="mt-8 rounded-xl border border-dashed border-zinc-200 p-12 text-center">
-          <Bus size={36} className="mx-auto text-zinc-300" strokeWidth={1.5} />
-          <p className="mt-3 text-sm font-medium text-zinc-600">No transport assigned</p>
-          <p className="mt-1 text-xs text-zinc-400">This student has not been assigned to a school bus route.</p>
-        </div>
+      <div className="mx-auto w-full max-w-3xl space-y-6">
+        <PageHeader title="Transport" subtitle="School bus information and route details." />
+        <EmptyState
+          icon={Bus}
+          title="No transport assigned"
+          message="This student has not been assigned to a school bus route."
+        />
       </div>
     );
   }
@@ -162,10 +161,19 @@ export default function TransportPage() {
         </div>
       </section>
 
-      {/* Note */}
-      <p className="text-center text-xs text-zinc-400">
-        Live GPS tracking will be available once your school enables the GPS system.
-      </p>
+      {/* Live Tracking (future-ready slot) */}
+      <section className="overflow-hidden rounded-xl border border-dashed border-zinc-200 bg-zinc-50/60">
+        <div className="flex flex-col items-center gap-2 px-5 py-8 text-center">
+          <div className="flex h-11 w-11 items-center justify-center rounded-full bg-zinc-100">
+            <Satellite size={20} className="text-zinc-400" strokeWidth={1.5} />
+          </div>
+          <p className="text-sm font-semibold text-zinc-700">Live Tracking Unavailable</p>
+          <p className="max-w-sm text-xs text-zinc-500">
+            Your school hasn't enabled GPS tracking for this route yet. Once enabled, you'll see the bus's
+            live location, next stop and last-updated time here.
+          </p>
+        </div>
+      </section>
     </div>
   );
 }

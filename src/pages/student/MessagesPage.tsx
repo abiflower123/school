@@ -3,6 +3,7 @@ import { useLocation } from "react-router-dom";
 import { MessageSquare, Search, Send, ArrowLeft } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { getConversations, type Conversation } from "../../services/mock/messages";
+import { EmptyState } from "../../components/ui/EmptyState";
 
 export default function MessagesPage() {
   const { selectedChild } = useAuth();
@@ -13,6 +14,7 @@ export default function MessagesPage() {
   const [activeConv, setActiveConv] = useState<Conversation | null>(null);
   const [replyText, setReplyText] = useState("");
   const [search, setSearch] = useState("");
+  const [sendingMessageId, setSendingMessageId] = useState<string | null>(null);
 
   // Re-sync when the selected child changes, and open a deep-linked
   // conversation if navigated here from the Teachers page.
@@ -51,6 +53,9 @@ export default function MessagesPage() {
     setConversations(prev => prev.map(c => c.id === activeConv.id ? updated : c));
     setActiveConv(updated);
     setReplyText("");
+
+    setSendingMessageId(newMsg.id);
+    setTimeout(() => setSendingMessageId((current) => (current === newMsg.id ? null : current)), 900);
   };
 
   return (
@@ -77,10 +82,7 @@ export default function MessagesPage() {
           </div>
           <div className="flex-1 overflow-y-auto divide-y divide-zinc-100">
             {filtered.length === 0 ? (
-              <div className="p-8 text-center">
-                <MessageSquare size={24} className="mx-auto text-zinc-300" />
-                <p className="mt-2 text-sm text-zinc-400">No conversations found.</p>
-              </div>
+              <EmptyState icon={MessageSquare} dashed={false} title="No conversations found" />
             ) : (
               filtered.map(c => (
                 <button
@@ -159,7 +161,19 @@ export default function MessagesPage() {
                         }`}>
                           {m.text}
                         </div>
-                        <span className="mt-1 text-[10px] text-zinc-400 px-1">{m.timestamp}</span>
+                        <span className="mt-1 flex items-center gap-1 text-[10px] text-zinc-400 px-1">
+                          {sendingMessageId === m.id ? (
+                            <>
+                              <span className="h-2.5 w-2.5 animate-spin rounded-full border-[1.5px] border-zinc-300 border-t-zinc-500" />
+                              Sending…
+                            </>
+                          ) : (
+                            <>
+                              {m.timestamp}
+                              {m.sender === "student" && <span className="text-zinc-300">· Sent</span>}
+                            </>
+                          )}
+                        </span>
                       </div>
                     </div>
                   );

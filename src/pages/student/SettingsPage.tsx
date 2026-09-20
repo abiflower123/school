@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Bell, Lock, Globe, Moon, Save, CheckCircle2 } from "lucide-react";
 import { useLanguage, type Language } from "../../context/LanguageContext";
 
@@ -25,9 +25,7 @@ type TabId = "notifications" | "appearance" | "language" | "security";
 export default function SettingsPage() {
   const { language, setLanguage } = useLanguage();
   const [activeTab, setActiveTab] = useState<TabId>("notifications");
-  const [saved, setSaved] = useState(false);
-
-  const [isDarkMode, setIsDarkMode] = useState(() => document.documentElement.classList.contains("dark"));
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
 
   const [prefs, setPrefs] = useState<NotificationPrefs>(() => {
     try {
@@ -38,29 +36,22 @@ export default function SettingsPage() {
     }
   });
 
-  const toggleDarkMode = () => {
-    const isDark = document.documentElement.classList.toggle("dark");
-    setIsDarkMode(isDark);
-    localStorage.setItem("theme", isDark ? "dark" : "light");
-  };
-
-  useEffect(() => {
-    const theme = localStorage.getItem("theme");
-    if (theme === "dark" || (!theme && window.matchMedia("(prefers-color-scheme: dark)").matches)) {
-      document.documentElement.classList.add("dark");
-      setIsDarkMode(true);
-    }
-  }, []);
-
   const togglePref = (key: keyof NotificationPrefs) => {
     setPrefs((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
-    localStorage.setItem(NOTIF_KEY, JSON.stringify(prefs));
-    setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
+    setSaveState("saving");
+    setTimeout(() => {
+      try {
+        localStorage.setItem(NOTIF_KEY, JSON.stringify(prefs));
+        setSaveState("saved");
+      } catch {
+        setSaveState("error");
+      }
+      setTimeout(() => setSaveState("idle"), 3000);
+    }, 500);
   };
 
   const tabs: { id: TabId; label: string; icon: typeof Bell }[] = [
@@ -77,10 +68,15 @@ export default function SettingsPage() {
         <p className="mt-1 text-sm text-zinc-500">Manage your account preferences and app settings.</p>
       </section>
 
-      {saved && (
+      {saveState === "saved" && (
         <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700 transition-all">
           <CheckCircle2 size={16} />
           Settings saved successfully!
+        </div>
+      )}
+      {saveState === "error" && (
+        <div className="flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700 transition-all">
+          Could not save your preferences. Please try again.
         </div>
       )}
 
@@ -148,10 +144,15 @@ export default function SettingsPage() {
               <div className="bg-zinc-50 p-6 flex justify-end">
                 <button
                   type="submit"
-                  className="flex items-center gap-2 rounded-lg bg-zinc-900 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-zinc-800"
+                  disabled={saveState === "saving"}
+                  className="flex items-center gap-2 rounded-lg bg-zinc-900 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-zinc-800 disabled:opacity-60"
                 >
-                  <Save size={16} />
-                  Save Preferences
+                  {saveState === "saving" ? (
+                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                  ) : (
+                    <Save size={16} />
+                  )}
+                  {saveState === "saving" ? "Saving…" : "Save Preferences"}
                 </button>
               </div>
             </form>
@@ -168,20 +169,19 @@ export default function SettingsPage() {
               <div className="flex items-center justify-between px-6 py-5">
                 <div>
                   <p className="text-sm font-medium text-zinc-900">Dark Mode</p>
-                  <p className="mt-0.5 text-xs text-zinc-500">Switch between light and dark theme.</p>
+                  <p className="mt-0.5 text-xs text-zinc-500">
+                    Switch between light and dark theme. Coming soon — not yet available.
+                  </p>
                 </div>
                 <button
                   type="button"
                   role="switch"
-                  aria-checked={isDarkMode}
-                  onClick={toggleDarkMode}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                    isDarkMode ? "bg-zinc-900" : "bg-zinc-200"
-                  }`}
+                  aria-checked={false}
+                  disabled
+                  title="Dark mode is coming soon"
+                  className="relative inline-flex h-6 w-11 items-center rounded-full bg-zinc-100 cursor-not-allowed"
                 >
-                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                    isDarkMode ? "translate-x-6" : "translate-x-1"
-                  }`} />
+                  <span className="inline-block h-4 w-4 translate-x-1 transform rounded-full bg-white" />
                 </button>
               </div>
             </section>

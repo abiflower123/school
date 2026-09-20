@@ -22,6 +22,10 @@ import { getFeeSummary, formatINR } from "../../services/mock/fees";
 import { getNextClasses, DAYS } from "../../services/mock/timetable";
 import { getAnnouncements } from "../../services/mock/announcements";
 import { getProgress } from "../../services/mock/progress";
+import { SectionHeader } from "../../components/ui/PageHeader";
+import { EmptyState } from "../../components/ui/EmptyState";
+import { SkeletonCard, SkeletonRow } from "../../components/ui/Skeleton";
+import { useMockLoading } from "../../hooks/useMockLoading";
 
 // ─── helpers ───────────────────────────────────────────────
 function getDaysUntil(dateStr: string): number {
@@ -39,50 +43,11 @@ function getStatusColor(pct: number) {
   return { dot: "bg-rose-500", text: "text-rose-700", bg: "bg-rose-50" };
 }
 
-// ─── Section header sub-component ─────────────────────────
-function SectionHeader({
-  title,
-  subtitle,
-  linkLabel,
-  onLink,
-}: {
-  title: string;
-  subtitle?: string;
-  linkLabel: string;
-  onLink: () => void;
-}) {
-  return (
-    <div className="flex items-center justify-between border-b border-zinc-100 px-5 py-4">
-      <div>
-        <h2 className="text-sm font-semibold text-zinc-900">{title}</h2>
-        {subtitle && <p className="mt-0.5 text-[11px] text-zinc-400">{subtitle}</p>}
-      </div>
-      <button
-        type="button"
-        onClick={onLink}
-        className="flex items-center gap-1 text-[11px] font-medium text-zinc-400 transition hover:text-zinc-900"
-      >
-        {linkLabel}
-        <ChevronRight size={12} />
-      </button>
-    </div>
-  );
-}
-
-// ─── Empty state sub-component ────────────────────────────
-function EmptyRow({ message }: { message: string }) {
-  return (
-    <div className="flex flex-col items-center justify-center px-5 py-10 text-center">
-      <CheckCircle2 size={28} className="text-zinc-200" strokeWidth={1.5} />
-      <p className="mt-2.5 text-sm font-medium text-zinc-400">{message}</p>
-    </div>
-  );
-}
-
 // ─── Main Dashboard ────────────────────────────────────────
 export default function StudentOverviewPage() {
   const { selectedChild } = useAuth();
   const navigate = useNavigate();
+  const loading = useMockLoading([selectedChild?.id]);
 
   if (!selectedChild) return null;
 
@@ -169,6 +134,36 @@ export default function StudentOverviewPage() {
       accentBar: feeSummary.hasOverdue ? "bg-rose-400" : feeSummary.totalDue > 0 ? "bg-amber-400" : "bg-emerald-400",
     },
   ];
+
+  if (loading) {
+    return (
+      <div className="mx-auto w-full max-w-7xl space-y-6">
+        <div>
+          <h1 className="text-xl font-bold tracking-tight text-zinc-900">{todayDay}'s Overview</h1>
+          <p className="mt-0.5 text-sm text-zinc-500">
+            {selectedChild.name}&nbsp;&middot;&nbsp;Class {selectedChild.class}&#8209;{selectedChild.section}
+          </p>
+        </div>
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <SkeletonCard key={i} />
+          ))}
+        </div>
+        <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+          <div className="rounded-xl border border-zinc-200 bg-white">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <SkeletonRow key={i} />
+            ))}
+          </div>
+          <div className="rounded-xl border border-zinc-200 bg-white">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <SkeletonRow key={i} />
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto w-full max-w-7xl space-y-6">
@@ -363,7 +358,7 @@ export default function StudentOverviewPage() {
             onLink={() => navigate("/timetable")}
           />
           {nextClasses.length === 0 ? (
-            <EmptyRow message="No classes scheduled for today." />
+            <EmptyState icon={CheckCircle2} dashed={false} title="No classes today" message="No classes scheduled for today." />
           ) : (
             <div className="divide-y divide-zinc-50">
               {nextClasses.map((period) => {
@@ -437,7 +432,7 @@ export default function StudentOverviewPage() {
             onLink={() => navigate("/assignments")}
           />
           {assignmentItems.length === 0 ? (
-            <EmptyRow message="All caught up! Nothing pending right now." />
+            <EmptyState icon={CheckCircle2} dashed={false} title="All caught up" message="Nothing pending right now." />
           ) : (
             <div className="divide-y divide-zinc-50">
               {assignmentItems.map((item) => (
@@ -479,7 +474,7 @@ export default function StudentOverviewPage() {
             onLink={() => navigate("/exams")}
           />
           {exams.length === 0 ? (
-            <EmptyRow message="No upcoming exams scheduled." />
+            <EmptyState icon={CheckCircle2} dashed={false} title="No exams scheduled" message="No upcoming exams scheduled." />
           ) : (
             <div className="divide-y divide-zinc-50">
               {exams.map((exam) => {
@@ -524,7 +519,7 @@ export default function StudentOverviewPage() {
             onLink={() => navigate("/announcements")}
           />
           {announcements.length === 0 ? (
-            <EmptyRow message="No announcements at this time." />
+            <EmptyState icon={CheckCircle2} dashed={false} title="No announcements" message="No announcements at this time." />
           ) : (
             <div className="divide-y divide-zinc-50">
               {announcements.map((ann) => (

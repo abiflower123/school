@@ -8,17 +8,10 @@ import {
   ShieldCheck,
   Award,
   Search,
-  Printer,
   X,
-  ExternalLink,
   QrCode,
-  Calendar,
-  Building2,
   Sparkles,
   Zap,
-  ArrowRight,
-  ChevronRight,
-  Filter,
   Layers,
   FileText,
   BadgeCheck,
@@ -31,8 +24,9 @@ import {
   type DocumentType,
   type IssuedDocument,
   type DocumentRequest,
-  type DocumentCategory,
+  type DocumentStatus,
 } from "../../services/mock/documents";
+import { StatusBadge, type StatusVariant } from "../../components/ui/StatusBadge";
 
 const DOC_TYPE_OPTIONS: { type: DocumentType; description: string; icon: any; color: string }[] = [
   {
@@ -67,25 +61,24 @@ const DOC_TYPE_OPTIONS: { type: DocumentType; description: string; icon: any; co
   },
 ];
 
-const statusBadgeStyles: Record<string, string> = {
-  Available: "bg-emerald-500/10 text-emerald-700 border-emerald-200/60",
-  Ready: "bg-emerald-500/10 text-emerald-700 border-emerald-200/60 ring-1 ring-emerald-500/30",
-  Processing: "bg-blue-500/10 text-blue-700 border-blue-200/60 animate-pulse",
-  Pending: "bg-amber-500/10 text-amber-700 border-amber-200/60",
-  Issued: "bg-zinc-100 text-zinc-700 border-zinc-200",
+const STATUS_VARIANT: Record<DocumentStatus, StatusVariant> = {
+  Available: "success",
+  Ready: "success",
+  Processing: "info",
+  Pending: "warning",
+  Issued: "neutral",
 };
 
 export default function CertificatesPage() {
   const { selectedChild } = useAuth();
   const studentId = selectedChild?.id ?? "STU001";
   const studentName = selectedChild?.name ?? "Kavya Ranganathan";
-  const studentClass = selectedChild?.grade ? `Class ${selectedChild.grade}` : "Class X-A";
-  const rollNo = selectedChild?.rollNo ?? "2026-X-042";
+  const studentClass = selectedChild ? `Class ${selectedChild.class}-${selectedChild.section}` : "Class X-A";
+  const rollNo = selectedChild?.rollNumber ?? "2026-X-042";
 
   const [issuedDocs] = useState<IssuedDocument[]>(() => getIssuedDocuments(studentId));
   const [requests, setRequests] = useState<DocumentRequest[]>(() => getDocumentRequests(studentId));
   const [activeTab, setActiveTab] = useState<"official" | "merit" | "request" | "history">("official");
-  const [selectedCategory, setSelectedCategory] = useState<"All" | DocumentCategory>("All");
   const [searchQuery, setSearchQuery] = useState("");
 
   // Request Form States
@@ -102,20 +95,15 @@ export default function CertificatesPage() {
   // Filtered Documents
   const filteredIssuedDocs = useMemo(() => {
     return issuedDocs.filter((doc) => {
-      const matchesCategory =
-        selectedCategory === "All" ||
-        (selectedCategory === "Official" && (doc.category === "Official" || doc.category === "Academic")) ||
-        doc.category === selectedCategory;
-
       const matchesSearch =
         doc.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         doc.type.toLowerCase().includes(searchQuery.toLowerCase()) ||
         doc.purpose.toLowerCase().includes(searchQuery.toLowerCase()) ||
         doc.certificateNo.toLowerCase().includes(searchQuery.toLowerCase());
 
-      return matchesCategory && matchesSearch;
+      return matchesSearch;
     });
-  }, [issuedDocs, selectedCategory, searchQuery]);
+  }, [issuedDocs, searchQuery]);
 
   // Split Official vs Merit
   const officialDocs = useMemo(() => filteredIssuedDocs.filter((d) => d.category === "Official" || d.category === "Academic"), [filteredIssuedDocs]);
@@ -695,14 +683,7 @@ Verify online at: https://verify.ravionschool.edu.in/cert/${doc.verificationCode
                     </div>
 
                     <div className="flex items-center gap-3">
-                      <span
-                        className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold border ${
-                          statusBadgeStyles[req.status] ?? "bg-zinc-100 text-zinc-700"
-                        }`}
-                      >
-                        <Clock3 size={13} />
-                        {req.status}
-                      </span>
+                      <StatusBadge label={req.status} variant={STATUS_VARIANT[req.status]} icon={<Clock3 size={12} />} />
                       {req.status === "Ready" && (
                         <button
                           type="button"
